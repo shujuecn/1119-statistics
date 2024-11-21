@@ -49,13 +49,19 @@ plot_theme = theme(
 
 ```{R}
 data |>
-  pivot_longer(cols = c(WE, WD, W6),
-               names_to = "Variable",
-               values_to = "Value") |>
+  pivot_longer(
+    cols = c(WE, WD, W6),
+    names_to = "Variable",
+    values_to = "Value"
+  ) |>
   ggplot(aes(x = factor(TREAT), y = Value)) +
   geom_boxplot() +
   facet_wrap( ~ Variable, scales = "free") +
-  labs(title = "Comparison of Work Ability Across Groups (WE, WD, W6)", x = "Treatment Group", y = "Value") +
+  labs(
+    title = "Comparison of Work Ability Across Groups (WE, WD, W6)", 
+    x = "Treatment Group", 
+    y = "Value"
+  ) +
   plot_theme
 ```
 
@@ -207,7 +213,7 @@ data |>
 
 ## 6 圈出正确答案（可以使用四舍五入的值）（2分）
 
-* 标准组中吸烟者的比例是 $89%$。 
+* 标准组中吸烟者的比例是 $89\%$。 
 * 标准组吸烟者更多，$\beta$ 受体阻滞剂使用者比强化组少。
 
 ## 7 对于40岁以下的人来说，得心肌梗塞是不寻常的。计算样本中40岁以下患者的数量和相应比例。圈出正确答案（2分）
@@ -219,7 +225,7 @@ data |>
   gt()
 ```
 
-* $40$ 岁以下患者数量为 $8$，$40$ 岁以下患者比例为 $4%$。
+* $40$ 岁以下患者数量为 $8$，$40$ 岁以下患者比例为 $4\%$。
 
 ## 8 创建一个名为`CWC`（工作能力变化）的新变量，工作能力变化是WD和WE之间的差值。并制作按TREAT分类的干预成本（`COST`）和`CWC`的散点图。（2分）
 
@@ -253,7 +259,12 @@ data |>
 data |>
   ggplot(aes(x = AGE, y = WEFF, color = factor(TREAT))) +
   geom_point() +
-  facet_wrap( ~ TREAT, labeller = as_labeller(c(`0` = "Standard Group", `1` = "Intensive Group"))) +
+  facet_wrap(
+    ~ TREAT, 
+    labeller = as_labeller(c(
+      `0` = "Standard Group", 
+      `1` = "Intensive Group")
+  )) +
   labs(
     title = "Scatterplot of WEFF vs AGE by Treatment Group", 
     x = "Age", 
@@ -465,18 +476,22 @@ plot_scatter <- function(data, group_title = NULL, color = "black") {
 }
 
 # 创建整体散点图
-plot_overall <- plot_scatter(data, group_title = "Overall Scatterplot with Linear Fit", color = "black")
+plot_overall = plot_scatter(
+  data, 
+  group_title = "Overall Scatterplot with Linear Fit", 
+  color = "black"
+)
 
 # 创建对照组散点图
-plot_control <- plot_scatter(
-  data = data |> filter(TREAT == 0),
+plot_control = plot_scatter(
+  data |> filter(TREAT == 0),
   group_title = "Standard Group (TREAT = 0)",
   color = "red"
 )
 
 # 创建强化组散点图
-plot_treatment <- plot_scatter(
-  data = data |> filter(TREAT == 1),
+plot_treatment = plot_scatter(
+  data |> filter(TREAT == 1),
   group_title = "Intensive Group (TREAT = 1)",
   color = "blue"
 )
@@ -512,7 +527,7 @@ model_1 |>
   gt()
 ```
 
-* $R^2$ 约为 $41.1%$。
+* $R^2$ 约为 $41.1\%$。
 
 > 模型2：从模型1的分析中，我们可以确定患者年龄对工作能力有一些影响。研究人员还希望进一步研究β受体阻滞剂、吸烟习惯和糖尿病诊断对结果的影响。建立一个回归模型，评估矫正患者年龄、β受体阻滞剂、吸烟习惯和糖尿病诊断后的治疗效应差异。考虑一个可能“过拟合”的初步模型，包括患者的治疗变量和其它需要矫正的变量。
 
@@ -552,7 +567,7 @@ model_2 |>
   gt()
 ```
 
-* 调整模型中治疗效应的差异减少了 $50%$ 以上。
+* 调整模型中治疗效应的差异减少了 $50\%$ 以上。
 
 
 ## 29	对未调整和调整后的治疗效应对结果（工作能力变化）的影响之间的差异，可能的解释是什么？（2分）
@@ -567,7 +582,7 @@ model_2 |>
   gt()
 ```
 
-* $R^2$ 约为 $49.4%$。 
+* $R^2$ 约为 $49.4\%$。 
 
 ## 31	应该保留哪些变量用于简化的回归模型？（2分）
 
