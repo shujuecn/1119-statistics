@@ -1,0 +1,728 @@
+---
+title: "机构护理和强化训练康复与标准监督建议康复的比较——练习题"
+author: shujuecn
+date-modified: now
+date-format: "YYYY[年]M[月]D[日] HH:mm"
+format: html
+title-block-banner: true
+toc: true
+toc-title: Contents
+toc-depth: 2 
+toc-expand: 1 
+toc-location: left
+---
+
+```{R}
+#| echo: true
+#| warning: false
+library(tidyverse)
+library(naniar)
+library(rstatix)
+library(report)
+library(knitr)
+library(gt)
+library(patchwork)
+library(broom)
+```
+
+```{R}
+data = readxl::read_xlsx("data/数据.xlsx")
+
+data |> 
+  head(10) |> 
+  gt()
+```
+
+```{R}
+plot_theme = theme(
+  legend.position = "none",             # 隐藏图例
+  strip.text = element_text(size = 11), # 分面标签字体大小
+  axis.title = element_text(size = 12), # 坐标轴标题字体大小
+  axis.text = element_text(size = 10),  # 坐标轴刻度字体大小
+  plot.title = element_text(size = 12, hjust = 0.5)  # 图表标题字体大小
+)
+```
+
+# 一、应用问题：描述性统计
+
+## 1 为了比较两组的工作能力，请制作在入组时（`WE`）、出院时（`WD`）以及6个月时（`W6`）的箱线图。（2分）
+
+```{R}
+data |>
+  pivot_longer(cols = c(WE, WD, W6),
+               names_to = "Variable",
+               values_to = "Value") |>
+  ggplot(aes(x = factor(TREAT), y = Value)) +
+  geom_boxplot() +
+  facet_wrap( ~ Variable, scales = "free") +
+  labs(title = "Comparison of Work Ability Across Groups (WE, WD, W6)", x = "Treatment Group", y = "Value") +
+  plot_theme
+```
+
+## 2 下列哪项是错误的？（2分）
+
+### 2-A 与强化组相比，标准组在变量`WE`的入组时有更多的异常值。
+
+```{R}
+data |> 
+  group_by(TREAT) |> 
+  identify_outliers("WE") |> 
+  count(TREAT) |> 
+  gt()
+```
+
+* 标准组有 $6$ 个异常值，强化组只有 $2$ 个。
+
+### 2-B 箱线图显示，强化组在变量`WD`的非异常值范围似乎比标准组更宽。
+
+```{R}
+data |> 
+  summarise(
+    Q1 = quantile(WD, 0.25),        # 计算 Q1
+    Q3 = quantile(WD, 0.75),        # 计算 Q3
+    IQR = Q3 - Q1,                  # 计算 IQR
+    Lower_Bound = Q1 - 1.5 * IQR,   # 计算非异常值下界
+    Upper_Bound = Q3 + 1.5 * IQR,   # 计算非异常值上界
+    IQR_range = Upper_Bound - Lower_Bound,  # 非异常值范围
+    .by = TREAT                     # 按 TREAT 分组
+  ) |> 
+  gt()
+
+```
+
+### 2-C 在治疗期间达到的工作能力，在出院后对两组都能维持。
+
+* 自己评估。
+
+## 3 填写两个表格，用描述性统计数据，并回答下面的问题。（2分）
+
+```{R}
+# 封装描述统计量的计算
+calc_summary <- function(data, group_var = NULL, value_var) {
+  data |> 
+    group_by(across(all_of(group_var))) |> 
+    summarise(
+      N = n(),
+      MEAN = mean({{ value_var }}, na.rm = TRUE),
+      SD = sd({{ value_var }}, na.rm = TRUE),
+      MIN = min({{ value_var }}, na.rm = TRUE),
+      P25 = quantile({{ value_var }}, 0.25, na.rm = TRUE),
+      MEDIAN = median({{ value_var }}, na.rm = TRUE),
+      P75 = quantile({{ value_var }}, 0.75, na.rm = TRUE),
+      MAX = max({{ value_var }}, na.rm = TRUE),
+      IQR = IQR({{ value_var }}, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+```
+
+* AGE:
+
+```{R}
+summary_table <- bind_rows(
+  calc_summary(data, value_var = AGE) |> 
+    mutate(TREAT = "All patient's", .before = 1),  # 总体统计
+  calc_summary(data, group_var = "TREAT", value_var = AGE) |> 
+    mutate(TREAT = as.character(TREAT)) # 按 TREAT 分组统计
+) |> 
+  mutate(TREAT = case_when(
+    TREAT == "0" ~ "Standard group", 
+    TREAT == "1" ~ "Intensive group",
+    TRUE ~ "All patient's"
+  ))
+
+gt(summary_table, caption = "Descriptive Statistics for AGE by TREAT Group")
+```
+
+* WE:
+
+```{R}
+summary_table <- bind_rows(
+  calc_summary(data, value_var = WE) |> 
+    mutate(TREAT = "All patient's", .before = 1),  # 总体统计
+  calc_summary(data, group_var = "TREAT", value_var = WE) |> 
+    mutate(TREAT = as.character(TREAT)) # 按 TREAT 分组统计
+) |> 
+  mutate(TREAT = case_when(
+    TREAT == "0" ~ "Standard group", 
+    TREAT == "1" ~ "Intensive group",
+    TRUE ~ "All patient's"
+  ))
+
+gt(summary_table, caption = "Descriptive Statistics for WE by TREAT Group")
+```
+
+## 4 圈出正确答案（2分）
+
+### 4-A 标准组的患者比强化组的患者年龄稍大。
+
+```{R}
+data |> 
+  summarise(mean_age = mean(AGE, na.rm = TRUE), .by = TREAT) |> 
+  gt()
+```
+
+### 4-B 入组时的工作能力，强化组比标准组高。
+
+```{R}
+#| tbl-colwidths: [30,70]
+data |> 
+  summarise(mean_we = mean(WE, na.rm = TRUE), .by = TREAT) |> 
+  gt()
+```
+
+### 4-C 入组时的最小工作能力，强化组比标准组高。
+
+```{R}
+data |> 
+  summarise(min_work_entry = min(WE, na.rm = TRUE), .by = TREAT) |> 
+  gt()
+
+```
+
+## 5 查看两组受试者吸烟、患糖尿病和使用 $\beta$ 受体阻滞剂的比例。（2分）
+
+```{R}
+data |> 
+  group_by(TREAT) |> 
+  summarise(
+    Smokers = mean(SMOKE == 1, na.rm = TRUE),
+    Diabetes = mean(DIAB == 1, na.rm = TRUE),
+    Beta_Blockers = mean(B_BLOCK == 1, na.rm = TRUE)
+  ) |> 
+  mutate(
+    TREAT = ifelse(TREAT == 0, "Standard group", "Intensive group")
+  ) |> 
+  pivot_longer(
+    cols = c(Smokers, Diabetes, Beta_Blockers),
+    names_to = "Variable",
+    values_to = "Proportion"
+  ) |> 
+  pivot_wider(
+    names_from = TREAT,
+    values_from = Proportion
+  ) |> 
+  gt()
+```
+
+## 6 圈出正确答案（可以使用四舍五入的值）（2分）
+
+* 标准组中吸烟者的比例是 $89%$。 
+* 标准组吸烟者更多，$\beta$ 受体阻滞剂使用者比强化组少。
+
+## 7 对于40岁以下的人来说，得心肌梗塞是不寻常的。计算样本中40岁以下患者的数量和相应比例。圈出正确答案（2分）
+
+```{R}
+data |> 
+  mutate(age_40 = AGE < 40) |> 
+  summarise(n = sum(age_40), prob = mean(age_40)) |> 
+  gt()
+```
+
+* $40$ 岁以下患者数量为 $8$，$40$ 岁以下患者比例为 $4%$。
+
+## 8 创建一个名为`CWC`（工作能力变化）的新变量，工作能力变化是WD和WE之间的差值。并制作按TREAT分类的干预成本（`COST`）和`CWC`的散点图。（2分）
+
+```{R}
+data |>
+  mutate(CWC = WD - WE) |>
+  ggplot(aes(
+    x = CWC,
+    y = COST,
+    color = factor(TREAT, labels = c("Standard Group", "Intensive Group"))
+  )) +
+  geom_point() +
+  labs(
+    title = "Intervention Cost vs Work Ability Change (CWC)",
+    x = "Work Ability Change (CWC)",
+    y = "Intervention Cost (COST)",
+    color = "Treatment Group"
+  ) +
+  plot_theme +
+  theme(legend.position = "top")
+
+```
+
+## 9 下列哪项不是真的（2分）
+
+* 对于两组来说，`COST`和`CWC`之间存在正相关。
+
+## 10	制作按两治疗组分类的`WEFF`与年龄的散点图。（2分）
+
+```{R}
+data |>
+  ggplot(aes(x = AGE, y = WEFF, color = factor(TREAT))) +
+  geom_point() +
+  facet_wrap( ~ TREAT, labeller = as_labeller(c(`0` = "Standard Group", `1` = "Intensive Group"))) +
+  labs(
+    title = "Scatterplot of WEFF vs AGE by Treatment Group", 
+    x = "Age", 
+    y = "WEFF"
+  ) +
+  plot_theme
+```
+## 11	圈出错误陈述。（2分）
+
+* 以上都不是。
+
+## 12	给不同治疗组制作`TRIGE`变量、`WEFF`变量的直方图。（2分）
+
+
+```{R}
+data |> 
+  pivot_longer(
+    cols = c(TRIGE, WEFF),
+    names_to = "Variable",
+    values_to = "Value"
+  ) |> 
+  ggplot(aes(x = Value, fill = factor(TREAT))) +
+  geom_histogram(position = "dodge", bins = 30) +
+  facet_wrap(
+    ~ Variable + TREAT,
+    labeller = labeller(
+      TREAT = c(`0` = "Standard Group", `1` = "Intensive Group"),
+      Variable = c(TRIGE = "TRIGE", WEFF = "WEFF")
+    ),
+    scales = "free"
+  ) +
+  labs(
+    title = "Histograms of TRIGE and WEFF by Treatment Group",
+    x = "Value",
+    y = "Frequency",
+  ) +
+  plot_theme
+```
+
+## 13	关于变量的分布，下列哪项是正确的 （2分）
+
+* 自己评估。
+
+## 14	比较两组治疗组的心理状态，检查入组时（`PSYCHE`）和出院时（`PSYCHD`）的心理状态的中位数和百分比。下面哪个说法是不对的：（2分）
+
+
+```{R}
+data |> 
+  summarise(
+    medina_psyche = median(PSYCHE, na.rm = TRUE),
+    median_psychd = median(PSYCHD, na.rm = TRUE),
+    .by = TREAT
+  ) |> 
+  gt()
+```
+
+* 标准组和强化组在出院时的中位数值相同。
+
+## 15	分组为入组时和出院时的心理状态制作条形图。（2分）
+
+```{R}
+data |>
+  pivot_longer(
+    cols = c(PSYCHE, PSYCHD),
+    names_to = "Timepoint",
+    values_to = "Psyche_State"
+  ) |>
+  count(TREAT, Timepoint, Psyche_State) |>
+  mutate(Timepoint = factor(Timepoint, levels = c("PSYCHE", "PSYCHD"))) |> 
+  ggplot(aes(
+    x = factor(Psyche_State),
+    y = n,
+    fill = factor(TREAT)
+  )) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_grid(
+    rows = vars(Timepoint),
+    cols = vars(TREAT),
+    labeller = labeller(
+      TREAT = c(`0` = "Standard Group", `1` = "Intensive Group"),
+      Timepoint = c("PSYCHE" = "PSYCHE", "PSYCHD" = "PSYCHD")
+    )
+  ) +
+  labs(
+    title = "Distribution of Psychological State by Timepoint and Treatment Group",
+    x = "Psyche State",
+    y = "Frequency"
+  ) +
+  plot_theme
+```
+
+## 16	下列哪项是不正确的（2分）
+
+* 与标准组相比，强化组在出院时心理状态最高的患者比例（状态=7）更高。
+
+# 二、应用问题：差异比较（60分）
+
+## 17	强化组的工作能力，比较在治疗前（`WE`）和治疗后（`WD`）是否存在差异，请用规范的表格及统计学语言给出您的结论。（5分）
+
+```{R}
+data |> 
+  filter(TREAT == 1) |>   # 筛选强化组
+  pivot_longer(
+    cols = c("WE", "WD"),
+    names_to = "Timepoint",
+    values_to = "Work_Capacity"
+  ) |> 
+  t_test(Work_Capacity ~ Timepoint, paired = TRUE, detailed = TRUE) |> 
+  gt()
+```
+
+* 对于强化组患者，使用配对 t 检验比较治疗前（`WE`）和治疗后（`WD`）的工作能力。结果显示，治疗后工作能力（`WD`）显著高于治疗前（`WE`），均值差为 44.18（95% CI [39.88, 48.49]），t = 20.33，p < 0.001，差异具有统计学意义。
+
+
+## 18	对照组的工作能力，比较在治疗前（`WE`）和治疗后（`WD`）是否存在差异，请用规范的表格及统计学语言给出您的结论。（5分）
+
+```{R}
+data |> 
+  filter(TREAT == 0) |>   # 筛选标准组
+  pivot_longer(
+    cols = c("WE", "WD"),
+    names_to = "Timepoint",
+    values_to = "Work_Capacity"
+  ) |> 
+  t_test(Work_Capacity ~ Timepoint, paired = TRUE, detailed = TRUE) |> 
+  gt()
+```
+
+* 对于对照组患者，使用配对 t 检验比较治疗前（`WE`）和治疗后（`WD`）的工作能力。结果显示，治疗后工作能力（`WD`）显著高于治疗前（`WE`），均值差为 35.19（95% CI [31.22, 39.15]），t = 17.61，p < 0.001，差异具有统计学意义。
+
+## 19	治疗后，拟比较两组的工作能力的变化（`WEFF`）是否有差异，请为该研究问题建立假设检验步骤。并用规范的表格及统计学语言给出您的结论。（5分）
+
+* 原假设（$H_0$）：两组的工作能力变化（`WEFF`）无显著差异。
+* 备择假设（$H_1$）：两组的工作能力变化（`WEFF`）有显著差异。
+* 检验方法：两独立样本 t 检验。
+* 显著性水平：$\alpha$ = 0.05。
+
+```{R}
+#| waring: false
+
+data |> 
+  t_test(WEFF ~ TREAT, detailed = TRUE) |> 
+  gt()
+```
+* 自己描述。
+
+## 20	绘制治疗组别、成功率的四格表。（5分）
+
+```{R}
+contingency_table = data |> 
+  count(TREAT, SUCC3) |> 
+  mutate(
+    TREAT = if_else(TREAT == 0, "Standard", "Intensive"),
+    SUCC3 = ifelse(SUCC3 == 0, "Failure", "Success")
+  ) |> 
+  pivot_wider(names_from = SUCC3, values_from = n, values_fill = 0)
+
+contingency_table |> 
+  gt()
+```
+
+
+## 21	对照组以及强化组的成功率分别是多少？请绘制规范的统计学表格。（5分）
+
+```{R}
+contingency_table |>
+  mutate(Success_Rate = Success / (Success + Failure) * 100) |> 
+  gt()
+```
+
+## 22	对照组以及强化组的成功率是否有差异？请为该研究问题建立假设检验步骤。并请用规范的表格及统计学语言给出您的结论。（5分）
+
+* 原假设（$H_0$）：两组的成功率无显著差异。
+* 备择假设（$H_1$）：两组的成功率有显著差异。
+* 检验方法：卡方检验（Chi-square test）。
+* 显著性水平：$\alpha$ = 0.05。
+
+```{R}
+contingency_table |> 
+  column_to_rownames("TREAT") |> 
+  as.matrix() |> 
+  chisq_test() |> 
+  gt()
+```
+* 自己描述。
+
+# 三、应用问题：回归分析（38分）
+
+> 模型1：康复研究的目的是评估对经历过心肌梗塞的患者的治疗效应。回想一下t检验的结果。t检验是一种分析，只能考虑一个二元组变量。假设有其他重要的解释变量，你希望在分析中进行调整。回想一下你在描述性统计应用练习中制作的分类散点图。年龄和WEFF之间是否存在关联，对两组治疗组来说？（问题1-4）
+
+## 23	如果你的目标是想知道WEFF随年龄增长的的系数，以下哪种分析适合评估年龄和WEFF之间的关系？（2分）
+
+* 简单线性回归
+
+## 24	用散点图检查年龄和WEFF之间的关系。将结果变量放在y轴上，解释变量放在X轴上。你能得出什么结论？（2分）
+
+```{R}
+#| warning: false
+plot_scatter <- function(data, group_title = NULL, color = "black") {
+  ggplot(data, aes(x = AGE, y = WEFF)) +
+    geom_point(alpha = 0.6, color = color) +
+    geom_smooth(method = "lm", color = color, size = 1.2) +
+    labs(
+      title = group_title,
+      x = "Age",
+      y = "WEFF"
+    ) +
+    plot_theme
+}
+
+# 创建整体散点图
+plot_overall <- plot_scatter(data, group_title = "Overall Scatterplot with Linear Fit", color = "black")
+
+# 创建对照组散点图
+plot_control <- plot_scatter(
+  data = data |> filter(TREAT == 0),
+  group_title = "Standard Group (TREAT = 0)",
+  color = "red"
+)
+
+# 创建强化组散点图
+plot_treatment <- plot_scatter(
+  data = data |> filter(TREAT == 1),
+  group_title = "Intensive Group (TREAT = 1)",
+  color = "blue"
+)
+
+# 拼图
+(plot_overall / (plot_control | plot_treatment)) +
+  plot_layout(heights = c(2, 1.5)) 
+
+```
+
+* 患者年龄和`WEFF`之间存在负线性关系。 
+
+## 25	执行一个简单线性回归分析，以WEFF作为结果变量，年龄作为预测变量，下列哪项陈述是真实的？（2分）
+
+```{R}
+model_1 = lm(WEFF ~ AGE, data = data) 
+model_1
+```
+
+```{R}
+model_1 |> 
+  tidy() |> 
+  gt()
+```
+
+* `AGE`斜率约为 $-2.00$。
+
+## 26	模型解释的结果变量方差的分数是多少？（2分）
+
+```{R}
+model_1 |> 
+  glance() |> 
+  gt()
+```
+
+* $R^2$ 约为 $41.1%$。
+
+> 模型2：从模型1的分析中，我们可以确定患者年龄对工作能力有一些影响。研究人员还希望进一步研究β受体阻滞剂、吸烟习惯和糖尿病诊断对结果的影响。建立一个回归模型，评估矫正患者年龄、β受体阻滞剂、吸烟习惯和糖尿病诊断后的治疗效应差异。考虑一个可能“过拟合”的初步模型，包括患者的治疗变量和其它需要矫正的变量。
+
+```{R}
+model_2 = lm(WEFF ~ TREAT + AGE + B_BLOCK + SMOKE + DIAB, data = data) 
+model_2
+```
+
+## 27	调整其他解释变量后，两组治疗之间的工作能力变化的估计差异是多少？（2分）
+
+```{R}
+model_2 |> 
+  tidy() |> 
+  gt()
+```
+
+* `TREAT`的回归系数即为调整其他变量后，治疗效应的估计差异，约为 $3.56$。
+
+## 28	通过调整年龄、β受体阻滞剂、吸烟和糖尿病，治疗效应差异的估计如何受到影响？与使用两个样本t检验时的结果进行比较。（2分）
+
+* t检验：
+
+```{R}
+#| waring: false
+
+data |> 
+  t_test(WEFF ~ TREAT, var.equal = TRUE, detailed = TRUE) |> 
+  gt()
+```
+
+* 调整其他解释变量后：
+
+```{R}
+model_2 |> 
+  tidy() |> 
+  filter(term == "TREAT") |> 
+  gt()
+```
+
+* 调整模型中治疗效应的差异减少了 $50%$ 以上。
+
+
+## 29	对未调整和调整后的治疗效应对结果（工作能力变化）的影响之间的差异，可能的解释是什么？（2分）
+
+* 以上都对。
+
+## 30	模型2可以解释的工作能力变化的方差分数是多少？（2分）
+
+```{R}
+model_2 |> 
+  glance() |> 
+  gt()
+```
+
+* $R^2$ 约为 $49.4%$。 
+
+## 31	应该保留哪些变量用于简化的回归模型？（2分）
+
+```{R}
+model_2 |> 
+  MASS::stepAIC(
+    scope = list(
+      lower = lm(WEFF ~ 1, data = data), 
+      upper = model_2
+    ),
+    direction = "both",
+    trace = FALSE
+  ) |> 
+  tidy() |> 
+  gt()
+```
+
+* 逐步回归最终纳入的变量：治疗（`TREAT`）、年龄（`AGE`）、$\beta$ 受体阻滞剂（`B_BLOCK`）和吸烟（`SMOKE`）。
+
+> 模型3：运行一个简化的回归模型，简化到足以适应数据。这个简化的模型应该包括主要的解释变量和试验的结果，并大致预测未来心肌梗塞患者结果变量的平均值。（问题10-19）
+
+## 32	比较模型2和模型3，哪个模型更可取？（2分）
+
+```{R}
+model_3 = lm(WEFF ~ TREAT + AGE + B_BLOCK + SMOKE, data = data)
+model_3
+```
+
+```{R}
+bind_rows(
+  model_2 |> glance() |> mutate(model = "Model_2", .before = 1),
+  model_3 |> glance() |> mutate(model = "Model_3", .before = 1)
+) |> 
+  gt()
+```
+
+* 模型 $\rm{III}$ 更可取，因为那个模型的调整 $R^2$ 更高，并且包含的变量更少。
+
+## 33	预测变量中最强的贡献者是谁？（2分）
+
+```{R}
+model_3 |> 
+  tidy() |> 
+  gt()
+```
+
+* $\beta$ 受体阻滞剂（`B_BLOCK`）。
+
+## 34	患者每增加5岁，对工作能力变化的平均影响是多少（2分）
+
+```{R}
+model_3 |> 
+  tidy() |> 
+  filter(term == "AGE") |> 
+  select(term, estimate) |> 
+  mutate(`5_year` = estimate * 5) |> 
+  gt()
+```
+
+* 约为 $-10.9$ 瓦特。
+
+## 35	关于年龄效应，比较模型3和模型2（2分）
+
+```{R}
+bind_rows(
+  model_2 |> tidy() |> mutate(model = "Model_2", .before = 1),
+  model_3 |> tidy() |> mutate(model = "Model_3", .before = 1)
+) |> 
+  filter(term == "AGE") |> 
+  gt()
+```
+
+* 关于年龄的斜率系数没有相关变化。
+
+> 预测不同治疗的个体预期的平均WEFF
+许多医生希望预测来到他们诊所的患者的结果。基于背景因素，是否可能使用回归分析的结果来预测结果？注意：根据你的模型3回答以下问题
+
+## 36	假设我们有一个48岁的患者，吸烟但不使用 $\beta$ 受体阻滞剂。该患者接受标准治疗。这样的患者的预期`WEFF`是多少？（2分）
+
+```{R}
+new_data = tibble(
+  TREAT = 0,
+  AGE = 48,
+  B_BLOCK = 0,
+  SMOKE = 1
+)
+
+model_3 |> 
+  predict(new_data)
+```
+* 约为 $56.5$ 瓦特。
+
+## 37	对于一个75岁的患者，不吸烟，使用β受体阻滞剂，接受强化治疗，预期的WEFF是多少？（2分）
+
+
+```{R}
+new_data = tibble(
+  TREAT = 1,
+  AGE = 75,
+  B_BLOCK = 1,
+  SMOKE = 0
+)
+
+model_3 |> 
+  predict(new_data)
+```
+* 约为 $-16.1$ 瓦特。
+
+> 评估回归模型与适当的残差图。检查线性、等残差方差和正态分布残差的假设：
+如果你使用SPSS，你必须保存原始（未标准化）残差和预测值。用残差在y轴上，预测值在x轴上制作散点图。
+
+## 38	绘制残差与预测值的图。关于方差齐的假设的结论是什么？（2分）
+
+```{R}
+fit_data = data |> 
+  mutate(
+    residuals = residuals(model_3),
+    fitted = fitted(model_3)
+  )
+
+fit_data |> 
+  ggplot(aes(x = fitted, y = residuals)) +
+  geom_point(alpha = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Residuals vs Fitted Values",
+    x = "Fitted Values",
+    y = "Residuals"
+  ) +
+  plot_theme
+```
+
+* 由于预测值增加时残差的分布没有系统性增加或减少，假设得到满足。
+
+## 39	在Q-Q图或P-P图中绘制残差（或直方图），以检查正态分布的假设（2分）
+
+```{R}
+fit_data |> 
+  ggplot(aes(sample = residuals)) +
+  stat_qq() +
+  stat_qq_line(color = "blue", linetype = "dashed", linewidth = 0.8) +
+  labs(
+    title = "Q-Q Plot of Residuals",
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  ) +
+  plot_theme
+```
+
+* 绝大部分点沿着理论线排列，正态假设大致满足。
+
+## 40	假设你已经包含了最重要的解释变量，模型是否有效？（2分）
+
+* 大约是的。
+
+## 41	应该呈现哪种治疗效应的差异？（2分）
+
+* 模型 $\rm{III}$ 的调整效应。
